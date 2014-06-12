@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"time"
+	"strings"
 )
 
 type Message chan string
@@ -64,39 +64,64 @@ func (self *Server) listen() {
 
 func (self *Server) join(conn net.Conn) {
 	client := CreateClient(conn)
-	name := fmt.Sprintf("hax %d", time.Now().Unix())
+	//name := fmt.Sprintf("hax %d", time.Now().Unix())
+	name := getUniqName()
 	client.SetName(name)
 	self.clients[conn] = client
 	log.Printf("Auto assigned name for conn %p: %s\n", conn, name)
-	//go func() {
-	//	for {
-	//		msg := <-client.incoming
-	//		log.Printf("Accepted message from conn %p: %s\n", conn, name)
-	//		self.incoming <- fmt.Sprintf("%s says: %s", client.GetName(), msg)
-	//	}
-	//}()
+	go func() {
+		for {
+			msg := <-client.incoming
+			log.Printf("Accepted message from conn %p: %s\n", conn, name)
 
-	//go func() {
-	//	for {
-	//		conn := <-client.quiting
-	//		log.Printf("Client %s is quiting\n", client.GetName())
-	//		self.quiting <- conn
-	//	}
-	//}()
+			if strings.HasPrefix(msg, ":") {
+				if cmd, err := parseCommand(msg); err == nil {
+					if err = self.executeCommand(client, cmd); err == nil {
+						continue
+					} else {
+						log.Println(err.Error())
+					}
+				} else {
+					log.Println(err.Error())
+				}
+			}
+			self.incoming <- fmt.Sprintf("%s says: %s", client.GetName(), msg)
+		}
+	}()
 
 	go func() {
 		for {
-			select {
-			case msg := <-client.incoming:
-				log.Printf("Accepted message from conn %p: %s\n", conn, name)
-				self.incoming <- fmt.Sprintf("%s says: %s", client.GetName(), msg)
-			case conn := <-client.quiting:
-				log.Printf("Client %s is quiting\n", client.GetName())
-				self.quiting <- conn
-			}
-
+			conn := <-client.quiting
+			log.Printf("Client %s is quiting\n", client.GetName())
+			self.quiting <- conn
 		}
 	}()
+
+	//go func() {
+	//	for {
+	//		select {
+	//		case msg := <-client.incoming:
+	//			log.Printf("Accepted message from conn %p: %s\n", conn, name)
+
+	//			if strings.HasPrefix(msg, ":") {
+	//				if cmd, err := parseCommand(msg); err == nil {
+	//					if err = self.executeCommand(client, cmd); err == nil {
+	//						continue
+	//					} else {
+	//						log.Println(err.Error())
+	//					}
+	//				} else {
+	//					log.Println(err.Error())
+	//				}
+	//			}
+	//			self.incoming <- fmt.Sprintf("%s says: %s", client.GetName(), msg)
+	//		case conn := <-client.quiting:
+	//			log.Printf("Client %s is quiting\n", client.GetName())
+	//			self.quiting <- conn
+	//		}
+
+	//	}
+	//}()
 
 }
 
